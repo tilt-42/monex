@@ -8,11 +8,11 @@ from monex.expenses import Group, format_amount, parse_amount
 
 HELP_TEXT = (
   'Pour quand vous avez la flemme de faire un tricount mais la flemme de faire les calculs.\n\n'
-  '/new Alice Bob Carol Dave: crée un nouveau groupe avec ces prénoms (remplace un groupe existant)\n'
+  '/new Alice Bob Carol Dave: crée un nouveau groupe avec ces prénoms (remplace un groupe existant)\n\n'
   '/pay Alice 12.50: indique qu\'Alice a payé 12.50 pour tout le monde\n'
-  '/pay Alice 12.50 Bob Carol: indique qu\'Alice a payé 12.50 pour Bob et Carol seulement\n'
-  '/status: montre ce que chaque personne a payé et l\'état actuel des comptes\n'
-  '/settle: liste qui doit combien à qui\n'
+  '/pay Alice 12.50 Bob Carol: indique qu\'Alice a payé 12.50 pour Bob et Carol seulement\n\n'
+  '/status: montre ce que chaque personne a payé et l\'état actuel des comptes\n\n'
+  '/settle: liste qui doit combien à qui\n\n'
   '/help: montre ce message\n\n'
   'Les prénoms doivent encore être des mots tous seuls.'
 )
