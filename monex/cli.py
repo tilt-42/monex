@@ -1,20 +1,24 @@
 """The console front end: asks the questions and shows the results."""
 
-from monex.expenses import Group
+from monex.expenses import Group, format_amount, parse_amount
 
 YES_LIST = ('Y', 'y', 'yes', 'Yes', 'YES')
+
+
+def format_amounts(amounts):
+  return ', '.join(f'{name}: {format_amount(amount)}' for name, amount in amounts.items())
 
 
 def ask_yes_no(question):
   return input(question + '\n') in YES_LIST
 
 
-def ask_number(question):
+def ask_amount(question):
   while True:
     try:
-      return int(input(question + '\n'))
+      return parse_amount(input(question + '\n'))
     except ValueError:
-      print('Please enter a number')
+      print('Please enter an amount like 12.50')
 
 
 def ask_participant(question, participants):
@@ -43,12 +47,13 @@ def run():
   add_payment = True
   while add_payment:
     payer = ask_participant('Please enter the name of the payer', group.participants)
-    amount = ask_number('Please enter the amount')
+    amount = ask_amount('Please enter the amount')
     group.add_expense(payer, amount)
     print('Expense added')
     add_payment = ask_yes_no('add another expense?')
 
-  print("Total paid: " + str(group.total_paid_by_participant()))
-  print("Expenses per participant: " + str(group.expense_per_participant()))
-  print("Balances per participant: " + str(group.balance_per_participant()))
-  print("Settlements needed: " + str(group.settle_balances()))
+  settlements = [f'{debtor} pays {creditor} {format_amount(amount)}' for debtor, creditor, amount in group.settle_balances()]
+  print("Total paid: " + format_amounts(group.total_paid_by_participant()))
+  print("Expenses per participant: " + format_amount(group.expense_per_participant()))
+  print("Balances per participant: " + format_amounts(group.balance_per_participant()))
+  print("Settlements needed: " + ', '.join(settlements))

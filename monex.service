@@ -1,0 +1,15 @@
+[Unit]
+Description=Monex Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=raspi
+WorkingDirectory=/home/raspi/monex
+EnvironmentFile=/home/raspi/monex.env
+ExecStart=/home/raspi/monex/.venv/bin/python -m monex.telegram_bot
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
