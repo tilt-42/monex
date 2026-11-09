@@ -115,7 +115,7 @@ async def show_screen(query, text, keyboard=None):
 async def show_result(update, context, text):
   """Leave the result in the chat history and open a fresh menu below it."""
   query = update.callback_query
-  context.chat_data.pop('draft', None)
+  await discard_draft(context, query.message.chat_id)
   await show_screen(query, text)
   group = context.chat_data.get('group')
   await context.bot.send_message(query.message.chat_id, menu_text(group), reply_markup=menu_keyboard(group))
@@ -131,11 +131,29 @@ async def ask_by_reply(chat_id, context, text, placeholder):
   return prompt.message_id
 
 
+async def delete_prompt(context, chat_id, message_id):
+  """Remove a finished question, otherwise Telegram keeps the reply box attached to it."""
+  if not message_id:
+    return
+  try:
+    await context.bot.delete_message(chat_id, message_id)
+  except BadRequest:
+    pass  # Already deleted, or too old for Telegram to allow it.
+
+
+async def discard_draft(context, chat_id):
+  draft = context.chat_data.pop('draft', None)
+  if draft is not None:
+    await delete_prompt(context, chat_id, draft.amount_prompt_id)
+
+
 async def ask_for_names(chat_id, context, text=NAMES_PROMPT):
+  await delete_prompt(context, chat_id, context.chat_data.get('names_prompt_id'))
   context.chat_data['names_prompt_id'] = await ask_by_reply(chat_id, context, text, 'Alice Bob Carol')
 
 
 async def ask_for_amount(chat_id, context, draft, text=AMOUNT_PROMPT):
+  await delete_prompt(context, chat_id, draft.amount_prompt_id)
   draft.amount_prompt_id = await ask_by_reply(chat_id, context, text, '12.50')
 
 
@@ -167,14 +185,15 @@ async def receive_names(update, context):
     return
 
   context.chat_data['group'] = group
-  context.chat_data.pop('names_prompt_id')
-  context.chat_data.pop('draft', None)
+  await delete_prompt(context, message.chat_id, context.chat_data.pop('names_prompt_id'))
+  await discard_draft(context, message.chat_id)
   await message.reply_text(menu_text(group), reply_markup=menu_keyboard(group))
 
 
 @needs_group
 async def start_expense(update, context, group):
   query = update.callback_query
+  await discard_draft(context, query.message.chat_id)
   context.chat_data['draft'] = ExpenseDraft(query.message.message_id, list(group.participants))
   await show_screen(query, 'Qui a payé ?', payer_keyboard(group))
 
@@ -199,11 +218,13 @@ async def receive_amount(update, context, draft):
     await ask_for_amount(message.chat_id, context, draft, INVALID_AMOUNT_TEXT)
     return
 
+  await delete_prompt(context, message.chat_id, draft.amount_prompt_id)
+  draft.amount_prompt_id = 0
+
   # From here the buttons live on a new message, below the typed amount.
   previous_message_id = draft.message_id
   sent = await message.reply_text(beneficiaries_text(draft), reply_markup=beneficiaries_keyboard(context.chat_data['group'], draft))
   draft.message_id = sent.message_id
-  draft.amount_prompt_id = 0
   await context.bot.edit_message_reply_markup(message.chat_id, previous_message_id, reply_markup=None)
 
 
@@ -234,7 +255,7 @@ async def confirm_expense(update, context, draft):
 
 @needs_draft
 async def cancel_expense(update, context, draft):
-  context.chat_data.pop('draft')
+  await discard_draft(context, update.callback_query.message.chat_id)
   group = context.chat_data['group']
   await show_screen(update.callback_query, menu_text(group), menu_keyboard(group))
 
