@@ -7,15 +7,15 @@ from telegram.ext import Application, CommandHandler
 from monex.expenses import Group, format_amount, parse_amount
 
 HELP_TEXT = (
-  'I split small shared expenses.\n\n'
-  '/new Alice Bob Carol - start a new group (replaces the current one)\n'
-  '/pay Alice 12.50 - record that Alice paid 12.50 for everyone\n'
-  '/status - show what everyone paid and their balance\n'
-  '/settle - show who should pay whom\n'
-  '/help - show this message\n\n'
-  'Names are one word each.'
+  'Pour quand vous avez la flemme de faire un tricount mais la flemme de faire les calculs.\n\n'
+  '/new Alice Bob Carol: crée un nouveau groupe avec ces prénoms (remplace un groupe existant)\n'
+  '/pay Alice 12.50: indique qu\'Alice a payé 12.50 pour tout le monde\n'
+  '/status: montre ce que chaque personne a payé et l\'état actuel des comptes\n'
+  '/settle: liste qui doit combien à qui\n'
+  '/help: montre ce message\n\n'
+  'Les prénoms doivent encore être des mots tous seuls.'
 )
-NO_GROUP_TEXT = 'There is no group in this chat yet. Start one with /new Alice Bob'
+NO_GROUP_TEXT = 'Y\'a pas de groupe encore ! Commences-en un avec /new Alice Bob'
 
 
 async def reply(update, text):
