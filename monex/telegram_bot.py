@@ -1,7 +1,6 @@
 """The Telegram front end, driven by buttons. Each chat has its own Group, kept in memory until the bot restarts."""
 
 import os
-import re
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -24,10 +23,9 @@ HELP_TEXT = (
 NO_GROUP_TEXT = 'Y\'a pas de groupe encore ! Commences-en un avec le bouton Nouveau groupe.'
 NAMES_PROMPT = 'Réponds à ce message avec les prénoms, séparés par des espaces (au moins deux).'
 INVALID_NAMES_TEXT = 'Les prénoms ne peuvent contenir que des lettres, des chiffres, - et \'.\n\n' + NAMES_PROMPT
+AMOUNT_PROMPT = 'Réponds à ce message avec le montant, par exemple 12.50.'
+INVALID_AMOUNT_TEXT = 'Montant invalide.\n\n' + AMOUNT_PROMPT
 EXPIRED_TEXT = 'Cette saisie n\'est plus active.'
-
-# What the amount may look like while it is still being typed, for example '12.'.
-AMOUNT_WHILE_TYPING = re.compile(r'[0-9]{1,12}(\.[0-9]{0,2})?')
 
 
 @dataclass
@@ -36,7 +34,7 @@ class ExpenseDraft:
   message_id: int
   beneficiaries: list
   payer: str = ''
-  amount_text: str = ''
+  amount_prompt_id: int = 0
   amount: Decimal = Decimal(0)
 
 
@@ -92,22 +90,12 @@ def payer_keyboard(group):
   return InlineKeyboardMarkup(in_rows(names) + [[button('❌ Annuler', 'cancel')]])
 
 
-def amount_keyboard():
-  keys = [button(key, f'key:{key}') for key in '123456789.0']
-  keys.append(button('⌫', 'key:delete'))
-  return InlineKeyboardMarkup(in_rows(keys, per_row=3) + [[button('✅ Suivant', 'amount:done'), button('❌ Annuler', 'cancel')]])
-
-
 def beneficiaries_keyboard(group, draft):
   names = [
     button(f'{"✅" if name in draft.beneficiaries else "⬜"} {name}', f'for:{i}')
     for i, name in enumerate(group.participants)
   ]
   return InlineKeyboardMarkup(in_rows(names) + [[button('✅ Valider', 'for:done'), button('❌ Annuler', 'cancel')]])
-
-
-def amount_text(draft):
-  return f'{draft.payer} a payé combien ?\n\nMontant : {draft.amount_text or "…"}'
 
 
 def beneficiaries_text(draft):
@@ -137,9 +125,27 @@ async def show_help(update, context):
   await update.effective_message.reply_text(HELP_TEXT, reply_markup=menu_keyboard(context.chat_data.get('group')))
 
 
+async def ask_by_reply(chat_id, context, text, placeholder):
+  """Ask for typed text. It must come as a reply, because bots don't see other messages in groups."""
+  prompt = await context.bot.send_message(chat_id, text, reply_markup=ForceReply(input_field_placeholder=placeholder))
+  return prompt.message_id
+
+
 async def ask_for_names(chat_id, context, text=NAMES_PROMPT):
-  prompt = await context.bot.send_message(chat_id, text, reply_markup=ForceReply(input_field_placeholder='Alice Bob Carol'))
-  context.chat_data['names_prompt_id'] = prompt.message_id
+  context.chat_data['names_prompt_id'] = await ask_by_reply(chat_id, context, text, 'Alice Bob Carol')
+
+
+async def ask_for_amount(chat_id, context, draft, text=AMOUNT_PROMPT):
+  draft.amount_prompt_id = await ask_by_reply(chat_id, context, text, '12.50')
+
+
+async def receive_reply(update, context):
+  replied_to = update.effective_message.reply_to_message.message_id
+  draft = context.chat_data.get('draft')
+  if replied_to == context.chat_data.get('names_prompt_id'):
+    await receive_names(update, context)
+  elif draft is not None and replied_to == draft.amount_prompt_id:
+    await receive_amount(update, context, draft)
 
 
 async def start_new_group(update, context):
@@ -150,9 +156,6 @@ async def start_new_group(update, context):
 
 async def receive_names(update, context):
   message = update.effective_message
-  if message.reply_to_message.message_id != context.chat_data.get('names_prompt_id'):
-    return
-
   try:
     group = Group(parse_name(name) for name in message.text.replace(',', ' ').split())
   except ValueError:
@@ -179,29 +182,29 @@ async def start_expense(update, context, group):
 @needs_draft
 async def choose_payer(update, context, draft):
   query = update.callback_query
-  draft.payer = context.chat_data['group'].participants[int(query.data.split(':')[1])]
-  await show_screen(query, amount_text(draft), amount_keyboard())
-
-
-@needs_draft
-async def press_amount_key(update, context, draft):
-  query = update.callback_query
-  key = query.data.split(':')[1]
-  typed = draft.amount_text[:-1] if key == 'delete' else draft.amount_text + key
-  if typed == '' or AMOUNT_WHILE_TYPING.fullmatch(typed):
-    draft.amount_text = typed
-  await show_screen(query, amount_text(draft), amount_keyboard())
-
-
-@needs_draft
-async def confirm_amount(update, context, draft):
-  query = update.callback_query
-  try:
-    draft.amount = parse_amount(draft.amount_text)
-  except ValueError:
-    await query.answer('Entre un montant plus grand que 0.', show_alert=True)
+  if draft.payer:  # A double tap must not ask for the amount twice.
+    await query.answer()
     return
-  await show_screen(query, beneficiaries_text(draft), beneficiaries_keyboard(context.chat_data['group'], draft))
+
+  draft.payer = context.chat_data['group'].participants[int(query.data.split(':')[1])]
+  await show_screen(query, f'{draft.payer} a payé combien ?', InlineKeyboardMarkup([[button('❌ Annuler', 'cancel')]]))
+  await ask_for_amount(query.message.chat_id, context, draft)
+
+
+async def receive_amount(update, context, draft):
+  message = update.effective_message
+  try:
+    draft.amount = parse_amount(message.text)
+  except ValueError:
+    await ask_for_amount(message.chat_id, context, draft, INVALID_AMOUNT_TEXT)
+    return
+
+  # From here the buttons live on a new message, below the typed amount.
+  previous_message_id = draft.message_id
+  sent = await message.reply_text(beneficiaries_text(draft), reply_markup=beneficiaries_keyboard(context.chat_data['group'], draft))
+  draft.message_id = sent.message_id
+  draft.amount_prompt_id = 0
+  await context.bot.edit_message_reply_markup(message.chat_id, previous_message_id, reply_markup=None)
 
 
 @needs_draft
@@ -258,14 +261,12 @@ async def show_settlements(update, context, group):
 def add_handlers(application):
   application.add_handler(CommandHandler(['start', 'help'], show_help))
   # Commands are included so that a reply like "/pay Bob" gets refused instead of ignored.
-  application.add_handler(MessageHandler(filters.TEXT & filters.REPLY, receive_names))
+  application.add_handler(MessageHandler(filters.TEXT & filters.REPLY, receive_reply))
   application.add_handler(CallbackQueryHandler(start_new_group, pattern='^menu:new$'))
   application.add_handler(CallbackQueryHandler(start_expense, pattern='^menu:expense$'))
   application.add_handler(CallbackQueryHandler(show_status, pattern='^menu:status$'))
   application.add_handler(CallbackQueryHandler(show_settlements, pattern='^menu:settle$'))
   application.add_handler(CallbackQueryHandler(choose_payer, pattern='^payer:'))
-  application.add_handler(CallbackQueryHandler(press_amount_key, pattern='^key:'))
-  application.add_handler(CallbackQueryHandler(confirm_amount, pattern='^amount:done$'))
   application.add_handler(CallbackQueryHandler(confirm_expense, pattern='^for:done$'))
   application.add_handler(CallbackQueryHandler(toggle_beneficiary, pattern='^for:'))
   application.add_handler(CallbackQueryHandler(cancel_expense, pattern='^cancel$'))
