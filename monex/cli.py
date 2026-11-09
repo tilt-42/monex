@@ -1,6 +1,6 @@
 """The console front end: asks the questions and shows the results."""
 
-from monex.expenses import Group, format_amount, parse_amount
+from monex.expenses import Group, format_amount, parse_amount, parse_name
 
 YES_LIST = ('Y', 'y', 'yes', 'Yes', 'YES')
 
@@ -21,6 +21,14 @@ def ask_amount(question):
       print('Please enter an amount like 12.50')
 
 
+def ask_name(question):
+  while True:
+    try:
+      return parse_name(input(question + '\n'))
+    except ValueError:
+      print("Names can only contain letters, numbers, - and '")
+
+
 def ask_participant(question, participants):
   print('Enter one of these:')
   print('\n'.join(participants))
@@ -36,7 +44,7 @@ def ask_participants():
   participants = []
   add_participant = True
   while add_participant:
-    participants.append(input('enter the name of a participant\n'))
+    participants.append(ask_name('enter the name of a participant'))
     add_participant = ask_yes_no('add another participant? (y/n)')
   return participants
 

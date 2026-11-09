@@ -1,11 +1,25 @@
 """The money logic. Nothing here reads input or prints, so any front end can use it."""
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from decimal import Decimal
 
 CENT = Decimal('0.01')
 AMOUNT_FORMAT = re.compile(r'[0-9]{1,12}([.,][0-9]{1,2})?')
+# Digits and Latin letters, including accented ones. The two ranges skip × and ÷.
+NAME_CHARACTERS = '0-9A-Za-zÀ-ÖØ-öø-ſ'
+# Hyphens and apostrophes are only allowed between other characters, as in Jean-Luc.
+NAME_FORMAT = re.compile(f"[{NAME_CHARACTERS}]+(['’-][{NAME_CHARACTERS}]+)*")
+
+
+def parse_name(text):
+  """Return a clean participant name, or raise ValueError if it has forbidden characters."""
+  # Some devices send ë as e plus a separate accent, so combine them first.
+  name = unicodedata.normalize('NFC', text.strip())
+  if not NAME_FORMAT.fullmatch(name):
+    raise ValueError(f'Not a valid name: {text}')
+  return name
 
 
 def parse_amount(text):
