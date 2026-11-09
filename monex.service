@@ -5,9 +5,9 @@ Wants=network-online.target
 
 [Service]
 User=raspi
-WorkingDirectory=/home/raspi/monex
-EnvironmentFile=/home/raspi/monex.env
-ExecStart=/home/raspi/monex/.venv/bin/python -m monex.telegram_bot
+WorkingDirectory=/home/raspi/projects/monex
+EnvironmentFile=/home/raspi/projects/monex.env
+ExecStart=/home/raspi/projects/monex/.venv/bin/python -m monex.telegram_bot
 Restart=always
 RestartSec=10
 

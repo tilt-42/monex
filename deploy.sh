@@ -8,4 +8,4 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 git push origin main
-ssh -t raspi@raspi 'cd ~/monex && git pull --ff-only && .venv/bin/pip install --quiet -r requirements.txt && sudo systemctl restart monex && sleep 5 && systemctl status monex --no-pager -n 5'
+ssh -t raspi@raspi 'cd ~/projects/monex && git pull --ff-only && .venv/bin/pip install --quiet -r requirements.txt && sudo systemctl restart monex && sleep 5 && systemctl status monex --no-pager -n 5'
