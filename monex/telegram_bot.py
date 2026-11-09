@@ -8,8 +8,9 @@ from monex.expenses import Group, format_amount, parse_amount
 
 HELP_TEXT = (
   'Pour quand vous avez la flemme de faire un tricount mais la flemme de faire les calculs.\n\n'
-  '/new Alice Bob Carol: crée un nouveau groupe avec ces prénoms (remplace un groupe existant)\n'
+  '/new Alice Bob Carol Dave: crée un nouveau groupe avec ces prénoms (remplace un groupe existant)\n'
   '/pay Alice 12.50: indique qu\'Alice a payé 12.50 pour tout le monde\n'
+  '/pay Alice 12.50 Bob Carol: indique qu\'Alice a payé 12.50 pour Bob et Carol seulement\n'
   '/status: montre ce que chaque personne a payé et l\'état actuel des comptes\n'
   '/settle: liste qui doit combien à qui\n'
   '/help: montre ce message\n\n'
@@ -41,13 +42,14 @@ async def add_payment(update, context):
   if group is None:
     await reply(update, NO_GROUP_TEXT)
     return
-  if len(context.args) != 2:
-    await reply(update, 'Please use this format: /pay Alice 12.50')
+  if len(context.args) < 2:
+    await reply(update, 'Please use this format: /pay Alice 12.50 or /pay Alice 12.50 Bob Carol')
     return
 
-  payer, amount_text = context.args
-  if payer not in group.participants:
-    await reply(update, f'{payer} is not in this group. The names are: {", ".join(group.participants)}')
+  payer, amount_text, *beneficiaries = context.args
+  unknown = [name for name in (payer, *beneficiaries) if name not in group.participants]
+  if unknown:
+    await reply(update, f'Not in this group: {", ".join(unknown)}. The names are: {", ".join(group.participants)}')
     return
   try:
     amount = parse_amount(amount_text)
@@ -55,8 +57,9 @@ async def add_payment(update, context):
     await reply(update, 'Please enter an amount like 12.50')
     return
 
-  group.add_expense(payer, amount)
-  await reply(update, f'{payer} paid {format_amount(amount)}. Total so far: {format_amount(group.total_expenses())}')
+  group.add_expense(payer, amount, beneficiaries)
+  paid_for = ', '.join(dict.fromkeys(beneficiaries)) or 'everyone'
+  await reply(update, f'{payer} paid {format_amount(amount)} for {paid_for}. Total so far: {format_amount(group.total_expenses())}')
 
 
 async def show_status(update, context):
@@ -66,13 +69,10 @@ async def show_status(update, context):
     return
 
   paid = group.total_paid_by_participant()
+  shares = group.share_per_participant()
   balance = group.balance_per_participant()
-  lines = [
-    f'Total: {format_amount(group.total_expenses())}',
-    f'Share per person: {format_amount(group.expense_per_participant())}',
-    '',
-  ]
-  lines += [f'{name}: paid {format_amount(paid[name])}, balance {format_amount(balance[name])}' for name in group.participants]
+  lines = [f'Total: {format_amount(group.total_expenses())}', '']
+  lines += [f'{name}: paid {format_amount(paid[name])}, share {format_amount(shares[name])}, balance {format_amount(balance[name])}' for name in group.participants]
   await reply(update, '\n'.join(lines))
 
 

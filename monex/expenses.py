@@ -32,6 +32,7 @@ def format_amount(amount):
 class Expense:
   payer: str
   amount: Decimal
+  beneficiaries: tuple
 
 
 class Group:
@@ -42,10 +43,13 @@ class Group:
     self.participants = list(dict.fromkeys(participants))
     self.expenses = []
 
-  def add_expense(self, payer, amount):
-    if payer not in self.participants:
-      raise ValueError(f'Unknown participant: {payer}')
-    self.expenses.append(Expense(payer, amount))
+  def add_expense(self, payer, amount, beneficiaries=None):
+    """Record that payer paid amount, split equally between beneficiaries (everyone by default)."""
+    beneficiaries = tuple(dict.fromkeys(beneficiaries or self.participants))
+    for person in (payer, *beneficiaries):
+      if person not in self.participants:
+        raise ValueError(f'Unknown participant: {person}')
+    self.expenses.append(Expense(payer, amount, beneficiaries))
 
   def total_paid_by_participant(self):
     totals = {participant: 0 for participant in self.participants}
@@ -56,18 +60,18 @@ class Group:
   def total_expenses(self):
     return sum(expense.amount for expense in self.expenses)
 
-  def expense_per_participant(self):
-    if not self.participants:
-      return 0
-    return self.total_expenses() / len(self.participants)
+  def share_per_participant(self):
+    shares = {participant: 0 for participant in self.participants}
+    for expense in self.expenses:
+      share = expense.amount / len(expense.beneficiaries)
+      for beneficiary in expense.beneficiaries:
+        shares[beneficiary] += share
+    return shares
 
   def balance_per_participant(self):
-    balance = {}
-    expense_per_participant = self.expense_per_participant()
-    for participant in self.participants:
-      total_paid = sum(expense.amount for expense in self.expenses if expense.payer == participant)
-      balance[participant] = total_paid - expense_per_participant
-    return balance
+    paid = self.total_paid_by_participant()
+    shares = self.share_per_participant()
+    return {participant: paid[participant] - shares[participant] for participant in self.participants}
 
   def settle_balances(self):
     balance = self.balance_per_participant()

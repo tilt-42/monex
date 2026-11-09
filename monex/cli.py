@@ -54,6 +54,6 @@ def run():
 
   settlements = [f'{debtor} pays {creditor} {format_amount(amount)}' for debtor, creditor, amount in group.settle_balances()]
   print("Total paid: " + format_amounts(group.total_paid_by_participant()))
-  print("Expenses per participant: " + format_amount(group.expense_per_participant()))
+  print("Expenses per participant: " + format_amounts(group.share_per_participant()))
   print("Balances per participant: " + format_amounts(group.balance_per_participant()))
   print("Settlements needed: " + ', '.join(settlements))
